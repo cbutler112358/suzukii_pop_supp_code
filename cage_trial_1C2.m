@@ -1,3 +1,58 @@
+% Cage trial simulator (last updated 06/08/2022)
+% Author: Cole Butler 
+%
+% ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+% Function that performs a single small cage trial experiment. Separate 
+% Excel files are prepared containing the zygote frequencies of each
+% pairing, assuming females have a reduced fecundity in the recessive
+% female sterile drive case. 
+%
+% The following code snippet prepares the "raw" input for the function 
+% below, taking Drive 1 (dominant female lethal) as an example:
+% 
+%     filename = "drive1_fsRIDL.xlsx";
+%     if contains(filename,"1")
+%         MALE_CONV_RATE = 0.1382;
+%         FEMALE_CONV_RATE = NaN;
+%         releaseInd = 2; % Aa males released, dominant female sterile
+%     elseif contains(filename,"2")
+%         MALE_CONV_RATE = 0.4136;
+%         FEMALE_CONV_RATE = 0.2262;
+%         releaseInd = 1; % AA males released, recessive female sterile
+%     else
+%         error("Incorrect filename.");
+%     end
+%     raw = readcell(filename);
+% 
+% Remaining inputs and outputs are discussed below:
+% NUM_GENS -- no. of generations within which we are looking for pop.
+%             extinction 
+% multiRelease -- Boolean value, "true" for multiple releases, "false"
+%                 otherwise
+% rho -- release ratio of transgenic males released to (initial) wild-type
+%        males, e.g. 0.2 is 1 transgenic male released for every 5
+%        wild-type males
+% raw -- cell array depending on Excel files, see example above
+% MALE_CONV_RATE -- conversion efficiency in males (denoted 'g' in Excel
+%                   file)
+% FEMALE_CONV_RATE -- conversion efficiency in females (denoted 'h' in
+%                     Excel file); if left as NaN, conversion does not
+%                     occur in females (dominant female sterile)
+% driveInd -- index denoting which drive is being simulated: 1 is dominant 
+%             female sterile, Drive 2 is recessive female sterile
+% FITNESS_COST -- relative fitness cost: 1 for wild-type, 1-s for
+%                 hemizygotes, (1-s)^2 for homozygotes; affects hatching
+%                 probability
+% graphBool -- Boolean value; do you want the results to be plotted? 
+%
+% Outputs:
+% extinctGens -- generation of extinction, NaN if extinction was not
+%                achieved
+% totalMat -- matrix of total population, where genotype is by column
+% femaleVec -- vector of female population
+% popVec -- vector of total population, excluding releases
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 function [extinctGens, totalMat, femaleVec, popVec] = cage_trial_1C2(NUM_GENS,multiRelease,rho,...
     raw,MALE_CONV_RATE,FEMALE_CONV_RATE,driveInd,FITNESS_COST, graphBool)
 
