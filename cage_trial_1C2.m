@@ -57,10 +57,8 @@ function [extinctGens, totalMat, femaleVec, popVec] = cage_trial_1C2(NUM_GENS,mu
     raw,MALE_CONV_RATE,FEMALE_CONV_RATE,driveInd,FITNESS_COST, graphBool)
 
     if (driveInd==1)
-        % CONV_RATE = 0.176;
         releaseInd = 2; % Aa males released, dominant female sterile
     elseif (driveInd==2)
-        % CONV_RATE = 0.48;
         releaseInd = 1; % AA males released, recessive female sterile
     else
         error("Incorrect filename.");
