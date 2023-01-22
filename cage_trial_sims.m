@@ -1,25 +1,27 @@
 % Script for running simulations of the (updated) D. suzukii cage trial
 % code in cage_trial_split.m. These simulations use the most recent set of
-% parameters (01/19/23). 
+% parameters (01/22/23). 
 %
 % Also generates figures for showing average gen. of extinction. 
 
 %% Test sims
 
 % 
-% multiRelease = true;
-% rho = 0.05;
-% MALE_CONV_RATE = 0.9736;
-% FEMALE_CONV_RATE = 0.9388;
+% multiRelease = false;
+% rho = 10;
+% MALE_CONV_RATE = 0.9503; % 0.9736;
+% FEMALE_CONV_RATE = nan; % 0.9388;
 % fitnessCostVec = [0.05, 0];
 % RELATIVE_FECUNDITY = 0.6274;
 % graphBool = false; 
 % 
-% % random_num = 581027; % randi([0,1000000])
-% % rng(random_num);
+% random_num = randi([0,1000000])
+% rng(random_num);
 % 
 % data = cage_trial_split(multiRelease,rho,MALE_CONV_RATE,FEMALE_CONV_RATE,...
 %     fitnessCostVec,RELATIVE_FECUNDITY,graphBool);
+% disp(data.extinctGens)
+% disp(data.femaleMat)
 
 % subplot(1,2,1)
 % plot(0:19,data.femaleMat(:,2) + data.femaleMat(:,5),'-r','linewidth',2)
@@ -205,3 +207,61 @@ set(gca,'Layer','top')
 f = gcf;
 exportgraphics(f,'recessive_single_run.pdf','Resolution',600);
 
+%% Bar plot for frequency of extinctions resulting from single release for
+%  both drive types
+
+rhoVec = 1:10;
+% no. of replicates per set release
+numReps = 100;
+% frequency of extinction within 20 generations
+extinctFreqMat = nan(numReps,length(rhoVec),2);
+
+% parameters for simulation
+multiRelease = false;
+MALE_CONV_RATE = 0.9503;
+FEMALE_CONV_RATE = NaN;
+fitnessCostVec = [0.05, 0];
+RELATIVE_FECUNDITY = 0.6274;
+graphBool = false; 
+
+for i = rhoVec
+    sprintf("Running sim %.0f of %.0f",i,length(rhoVec))
+    
+    rho = i; 
+    for j = 1:numReps
+        data = cage_trial_split(multiRelease,rho,MALE_CONV_RATE,FEMALE_CONV_RATE,...
+            fitnessCostVec,RELATIVE_FECUNDITY,graphBool); 
+        extinctFreqMat(j,i,1) = ~isnan(data.extinctGens);
+    end
+end
+
+% store frequencies for drive type 1
+extinctFreqVec_1 = mean(extinctFreqMat(:,:,1));
+
+% parameters for simulation
+MALE_CONV_RATE = 0.9736;
+FEMALE_CONV_RATE = 0.9388;
+
+for i = rhoVec
+    sprintf("Running sim %.0f of %.0f (drive type 2)",i,length(rhoVec))
+    
+    rho = i; 
+    for j = 1:numReps
+        data = cage_trial_split(multiRelease,rho,MALE_CONV_RATE,FEMALE_CONV_RATE,...
+            fitnessCostVec,RELATIVE_FECUNDITY,graphBool); 
+        extinctFreqMat(j,i,2) = ~isnan(data.extinctGens);
+    end
+end
+
+% store frequencies for drive type 2
+extinctFreqVec_2 = mean(extinctFreqMat(:,:,2));
+
+figure
+bar([extinctFreqVec_1; extinctFreqVec_2]','BarWidth',1);
+ylim([0,1]);
+xlabel('release ratio','interpreter','latex');
+ylabel('extinction probability','interpreter','latex');
+set(gca,'FontSize',16);
+set(gca,'Layer','top')
+f = gcf;
+exportgraphics(f,'single_release_bar_plot.pdf','Resolution',600);
