@@ -1,11 +1,11 @@
-% Cage trial simulator (last updated 01/22/2023)
+% Cage trial simulator for a full (vs split) drive 
+% (last updated 03/19/2023)
 % Author: Cole Butler 
 %
 % ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-% Function that performs a single small cage trial experiment. Separate 
-% Excel files are prepared for determination of zygote frequencies for each
-% pairing. The program (and corresponding Excel sheets) assumes that the 
-% Cas9 is X-linked.
+% This function is similar to cage_trial_split.m but instead assumes that
+% the drive is autonomous rather than split. This essentially makes it a
+% simple homing experiment. 
 %
 % If a single release is used (multiRelease == false), the simulation 
 % automatically terminates if the gRNA and Cas9 components go extinct.
@@ -33,52 +33,48 @@
 %   zygoteFreqsMales -- male breeding table produced by genBT algorithm
 %   zygoteFreqsFemales -- as above but for females
 
-function [dataMat] = cage_trial_split(multiRelease,rho,...
+function [dataMat] = cage_trial_full(multiRelease,rho,...
     MALE_CONV_RATE,FEMALE_CONV_RATE,fitnessCostVec,RELATIVE_FECUNDITY,graphBool)
 
     if isnan(FEMALE_CONV_RATE)
         % dominant female sterile
-        releaseInd = 5; % ZYAa males released
         % construct zygote frequencies
-        breedingTables = genBT_simple_tethered_homing(MALE_CONV_RATE, ...
-            FEMALE_CONV_RATE, RELATIVE_FECUNDITY, 1);
+        breedingTables = genBT_simple_homing_suzukii(MALE_CONV_RATE, ...
+            FEMALE_CONV_RATE,RELATIVE_FECUNDITY,1);
         depoBool = false; % boolean flag for maternal Cas9 deposition
     else
         % recessive female sterile
-        releaseInd = 5; % ZYAa males released
-        breedingTables = genBT_simple_tethered_homing(MALE_CONV_RATE, ...
-            FEMALE_CONV_RATE, RELATIVE_FECUNDITY, 2);
+        breedingTables = genBT_simple_homing_suzukii(MALE_CONV_RATE, ...
+            FEMALE_CONV_RATE,RELATIVE_FECUNDITY,2);
         depoBool = true; 
     end
     
-    zygoteFreqsMales = breedingTables.male_genoArray;
-    zygoteFreqsFemales = breedingTables.female_genoArray;
+    % hemizygous males (Aa) always released
+    releaseInd = 2;
     
-    % fitness costs of respective split drive components
+    zygoteFreqsMales = breedingTables.genoArray;
+    zygoteFreqsFemales = breedingTables.genoArray;
+    
+    % fitness costs of each component of construct
     CAS9_COST = fitnessCostVec(1);
     GRNA_COST = fitnessCostVec(2); 
     
     %% run the sim
     % store no. of genotypes
-    NUM_GENOTYPES_MALES = 6;
-    NUM_GENOTYPES_FEMALES = 9;
+    NUM_GENOTYPES = 3;
 
-    maleMat = zeros(1, NUM_GENOTYPES_MALES);
+    maleMat = zeros(1, NUM_GENOTYPES);
     % matrix for FERTILE females
-    femaleMat = zeros(1, NUM_GENOTYPES_FEMALES);
+    femaleMat = zeros(1, NUM_GENOTYPES);
     % matrix for females made sterile by Cas9 deposition
-    sterileFemaleMat = zeros(1, NUM_GENOTYPES_FEMALES);
-    % matrix only for plotting (omits released individuals each gen)
-    %%% plotMat = NaN(1,NUM_GENS+1);
-    % allele frequency vectors
-    gRNA_alleleFreqVec = NaN(1,1); 
-    CAS9_alleleFreqVec = NaN(1,1); 
-    fitnessVec_males = [(1-GRNA_COST)^2, 1-GRNA_COST, 1,... 
-        (1-CAS9_COST)*(1-GRNA_COST)^2, (1-CAS9_COST)*(1-GRNA_COST), 1-CAS9_COST];
-    fitnessVec_females = [(1-GRNA_COST)^2, 1-GRNA_COST, 1, ...
-        (1-CAS9_COST)*(1-GRNA_COST)^2, (1-CAS9_COST)*(1-GRNA_COST), 1-CAS9_COST, ...
-        ((1-CAS9_COST)^2)*(1-GRNA_COST)^2, ((1-CAS9_COST)^2)*(1-GRNA_COST), (1-CAS9_COST)^2];
-
+    sterileFemaleMat = zeros(1, NUM_GENOTYPES);
+    % allele frequency vector
+    alleleFreqVec = NaN(1,1); 
+    fitnessVec_males = [((1-GRNA_COST)^2)*((1-CAS9_COST)^2), (1-GRNA_COST)*(1-CAS9_COST),...
+        1];
+    fitnessVec_females = [((1-GRNA_COST)^2)*((1-CAS9_COST)^2), (1-GRNA_COST)*(1-CAS9_COST),...
+        1];
+    % avg. clutch size 
     LAMBDA = 50;
 
     % 0 generation, begin with 300 males and females 
@@ -86,21 +82,15 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
     RELEASE_RATIO = rho; 
     maleMat(1,3) = INIT_POP;
     femaleMat(1,3) = INIT_POP;
-    % excludes released males... 
-    %%% plotMat(1,:) = femaleMat(1,:) + maleMat(1,:);
     popVec = zeros(1, 1); 
+    % note that released males are excluded from popVec
     popVec(1) = sum(maleMat(1,:)) + sum(femaleMat(1,:));
-    % add ZYAa males to test bottle
+    % add Aa males to test bottle
     maleMat(1,releaseInd) = round(RELEASE_RATIO*INIT_POP);
     
-    % total population 
-    %%% totalMat = maleMat + femaleMat;
-    gRNA_alleleFreqVec(1) = (2*maleMat(1,1) + maleMat(1,2) + 2*maleMat(1,4) + maleMat(1,5) + ...
-        2*femaleMat(1,1) + femaleMat(1,2) + 2*femaleMat(1,4) + femaleMat(1,5) + 2*femaleMat(1,7) + ...
-        femaleMat(1,8)) / (2*(sum(maleMat(1,:)) + sum(femaleMat(1,:)))); 
-    CAS9_alleleFreqVec(1) = (maleMat(1,4) + maleMat(1,5) + maleMat(1,6) + ...
-        2*femaleMat(1,7) + 2*femaleMat(1,8) + 2*femaleMat(1,9) + ...
-        femaleMat(1,4) + femaleMat(1,5) + femaleMat(1,6)) / (sum(maleMat(1,:)) + 2*sum(femaleMat(1,:))); 
+    % frequency of allele
+    alleleFreqVec(1) = (2*maleMat(1,1) + maleMat(1,2) + 2*femaleMat(1,1) + femaleMat(1,2)) ...
+        / (2*(sum(maleMat(1,:)) + sum(femaleMat(1,:)))); 
     femaleVec = zeros(1, 1); 
     femaleVec(1) = sum(femaleMat(1,:)); 
     
@@ -112,14 +102,14 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
     % female offspring produced
 
     % apply early-acting fitness cost
-    offspringZygoteFreqs = zygoteFreqsFemales(:,1:NUM_GENOTYPES_FEMALES).*fitnessVec_females;
-    fitnessMat = zeros(9,6); 
+    offspringZygoteFreqs = zygoteFreqsFemales(:,1:NUM_GENOTYPES).*fitnessVec_females;
+    fitnessMat = zeros(3,3); 
     sumZygoteFitness = sum(offspringZygoteFreqs,2);
     % male genotype by column, female genotype by row; 
     % probability offspring of certain genotype survive to adulthood in
     % next generation
-    for j = 1:(54/9)
-        fitnessMat(:,j) = sumZygoteFitness(((j-1)*9+1):(j*9));
+    for j = 1:3
+        fitnessMat(:,j) = sumZygoteFitness(((j-1)*3+1):(j*3));
     end
 
     % main for loop
@@ -151,12 +141,10 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
         numFemales = pairingVec - numMales;
         % male genotypes straightforward
         maleGenotypeVec = sum(mnrnd(numMales',zygoteFreqsMales));
-        
-        % disp(pairingVec);
-        
+                
         if (depoBool)
             %%% some female progeny are sterile because of maternal deposition
-            % of Cas9---keep track of which
+            %%% of Cas9---keep track of which
             
             % row --> motherDepoInd (crossings affected)
             % col --> gRNA          (inherit gRNA)
@@ -173,22 +161,19 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
             femaleGenotypeVec = sterileFemaleGenotypeVec + fertileFemaleGenotypeVec;
 
             % remove eggs that are not produced
-            maleGenotypeVec = maleGenotypeVec(1:NUM_GENOTYPES_MALES);
-            femaleGenotypeVec = femaleGenotypeVec(1:NUM_GENOTYPES_FEMALES);
-            sterileFemaleGenotypeVec = sterileFemaleGenotypeVec(1:NUM_GENOTYPES_FEMALES); 
+            maleGenotypeVec = maleGenotypeVec(1:NUM_GENOTYPES);
+            femaleGenotypeVec = femaleGenotypeVec(1:NUM_GENOTYPES);
+            sterileFemaleGenotypeVec = sterileFemaleGenotypeVec(1:NUM_GENOTYPES); 
             %%% unused
             %  fertileFemaleGenotypeVec = fertileFemaleGenotypeVec(1:NUM_GENOTYPES_FEMALES);
         else
             femaleGenotypeVec = sum(mnrnd(numFemales',zygoteFreqsFemales));
-            maleGenotypeVec = maleGenotypeVec(1:NUM_GENOTYPES_MALES);
-            femaleGenotypeVec = femaleGenotypeVec(1:NUM_GENOTYPES_FEMALES);
+            maleGenotypeVec = maleGenotypeVec(1:NUM_GENOTYPES);
+            femaleGenotypeVec = femaleGenotypeVec(1:NUM_GENOTYPES);
         end
 
         % determine genotypes and sexes of next generation...
         N = floor(INIT_POP*(numFemales_test/numFemales_control));
-        % disp([i,INIT_POP*(numFemales_test/numFemales_control)])
-        % disp([i,N]); 
-        % disp(maleGenotypeVec); 
         
         if (sum(maleGenotypeVec) + sum(femaleGenotypeVec)) < N
             % no. needed to initialize next generation is GREATER than the
@@ -239,10 +224,6 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
             femaleMat(i,:) = binornd(femaleMat(i,:), fitnessVec_females);
         end
         
-        % update plot matrix and vector, omitting released flies 
-        %%% plotMat(i,:) = maleMat(i,:) + femaleMat(i,:);
-        % disp(femaleMat(i,:));
-        
         if (depoBool)
             popVec(i) = sum(maleMat(i,:)) + sum(femaleMat(i,:)) + sum(sterileFemaleMat(i,:));
 
@@ -251,18 +232,9 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
                 maleMat(i,releaseInd) = maleMat(i,releaseInd) + round(RELEASE_RATIO*INIT_POP);  
             end
             
-            %%% totalMat(i,:) = maleMat(i,:) + femaleMat(i,:);
-            gRNA_alleleFreqVec(i) = (2*maleMat(i,1) + maleMat(i,2) + 2*maleMat(i,4) + maleMat(i,5) + ...
-                2*femaleMat(i,1) + femaleMat(i,2) + 2*femaleMat(i,4) + femaleMat(i,5) + 2*femaleMat(i,7) + ...
-                femaleMat(i,8) + 2*sterileFemaleMat(i,1) + sterileFemaleMat(i,2) + 2*sterileFemaleMat(i,4) + ...
-                sterileFemaleMat(i,5) + 2*sterileFemaleMat(i,7) + sterileFemaleMat(i,8)) / ...
+            alleleFreqVec(i) = (2*maleMat(i,1) + maleMat(i,2) + 2*femaleMat(i,1) + femaleMat(i,2) + ...
+                2*sterileFemaleMat(i,1) + sterileFemaleMat(i,2)) / ...
                 (2*(sum(maleMat(i,:)) + sum(femaleMat(i,:)) + sum(sterileFemaleMat(i,:)))); 
-            
-            CAS9_alleleFreqVec(i) = (maleMat(i,4) + maleMat(i,5) + maleMat(i,6) + ...
-                2*femaleMat(i,7) + 2*femaleMat(i,8) + 2*femaleMat(i,9) + ...
-                femaleMat(i,4) + femaleMat(i,5) + femaleMat(i,6) + ...
-                2*sterileFemaleMat(i,7) + 2*sterileFemaleMat(i,8) + 2*sterileFemaleMat(i,9) + ...
-                sterileFemaleMat(i,4) + sterileFemaleMat(i,5) + sterileFemaleMat(i,6)) / (sum(maleMat(i,:)) + 2*sum(femaleMat(i,:)) + 2*sum(sterileFemaleMat(i,:))); 
             
             femaleVec(i) = sum(femaleMat(i,:) + sterileFemaleMat(i,:)); 
         else
@@ -273,14 +245,8 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
                 maleMat(i,releaseInd) = maleMat(i,releaseInd) + round(RELEASE_RATIO*INIT_POP);  
             end            
             
-            %%% totalMat(i,:) = maleMat(i,:) + femaleMat(i,:);
-            gRNA_alleleFreqVec(i) = (2*maleMat(i,1) + maleMat(i,2) + 2*maleMat(i,4) + maleMat(i,5) + ...
-                2*femaleMat(i,1) + femaleMat(i,2) + 2*femaleMat(i,4) + femaleMat(i,5) + 2*femaleMat(i,7) + ...
-                femaleMat(i,8)) / (2*(sum(maleMat(i,:)) + sum(femaleMat(i,:)))); 
-            
-            CAS9_alleleFreqVec(i) = (maleMat(i,4) + maleMat(i,5) + maleMat(i,6) + ...
-                2*femaleMat(i,7) + 2*femaleMat(i,8) + 2*femaleMat(i,9) + ...
-                femaleMat(i,4) + femaleMat(i,5) + femaleMat(i,6)) / (sum(maleMat(i,:)) + 2*sum(femaleMat(i,:))); 
+            alleleFreqVec(i) = (2*maleMat(i,1) + maleMat(i,2) + 2*femaleMat(i,1) + femaleMat(i,2)) / ...
+                (2*(sum(maleMat(i,:)) + sum(femaleMat(i,:)))); 
             
             femaleVec(i) = sum(femaleMat(i,:)); 
         end
@@ -289,7 +255,7 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
         % sterile by maternal deposition) or males left
         femaleBool = (sum(femaleMat(i,:))  > 0);
         % only count males that are NOT released
-        maleBool = (sum(maleMat(i,[1:4,6])) > 0);
+        maleBool = (sum(maleMat(i,[1,3])) > 0);
         extinctFlag = (maleBool & femaleBool);
         
         if (~extinctFlag)
@@ -300,44 +266,44 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
         
         % for single releases, drive failure occurs when (i) the population 
         % is not extinct and (ii) drive components have disappeared
-        if ((multiRelease == false) && extinctFlag && (gRNA_alleleFreqVec(i) == 0) && (CAS9_alleleFreqVec(i) == 0))
+        if ((multiRelease == false) && extinctFlag && (alleleFreqVec(i) == 0))
             extinctGens = nan;
+            graphBool = false; 
             break
         end
         i = i + 1;
     end
 
     % replace nans in gRNA and CAS9 vectors
-    gRNA_alleleFreqVec(isnan(gRNA_alleleFreqVec)) = 0;
-    CAS9_alleleFreqVec(isnan(CAS9_alleleFreqVec)) = 0;
+    alleleFreqVec(isnan(alleleFreqVec)) = 0;
 
     if (graphBool)
         % plot everything
         close all 
         figure
         subplot(3,1,1)
-        plot(0:(i-1), popVec,'-o','LineWidth',2,'color','blue',...
+        plot(0:extinctGens, popVec,'-o','LineWidth',2,'color','blue',...
             'MarkerFaceColor','blue');
         ylim([0,max(popVec)+10]);
-        xlim([0,i-1]);
+        xlim([0,extinctGens]);
         ylabel('total pop.','interpreter','latex');
         xlabel('generation','interpreter','latex');
         set(gca,'FontSize',16);
 
         subplot(3,1,2)
-        plot(0:(i-1), femaleVec,'-o','LineWidth',2,'color','red',...
+        plot(0:extinctGens, femaleVec,'-o','LineWidth',2,'color','red',...
             'MarkerFaceColor','red');
         ylim([0,max(femaleVec)+10]);
-        xlim([0,i-1]);
+        xlim([0,extinctGens]);
         ylabel('no. of females','interpreter','latex');
         xlabel('generation','interpreter','latex');
         set(gca,'FontSize',16);
         
         subplot(3,1,3)
-        plot(0:(i-1), gRNA_alleleFreqVec,'-o','LineWidth',2,'color','black',...
+        plot(0:extinctGens, alleleFreqVec,'-o','LineWidth',2,'color','black',...
             'MarkerFaceColor','black');
         ylim([0,1]);
-        xlim([0,i-1]);
+        xlim([0,extinctGens]);
         ylabel('allele freq.','interpreter','latex');
         xlabel('generation','interpreter','latex');
         set(gca,'FontSize',16);
@@ -351,8 +317,7 @@ function [dataMat] = cage_trial_split(multiRelease,rho,...
     dataMat.femaleMat = femaleMat;
     dataMat.sterileFemaleMat = sterileFemaleMat;
     dataMat.maleMat = maleMat;
-    dataMat.gRNA_alleleFreqVec = gRNA_alleleFreqVec;
-    dataMat.CAS9_alleleFreqVec = CAS9_alleleFreqVec;
+    dataMat.alleleFreqVec = alleleFreqVec;
     dataMat.zygoteFreqsMales = zygoteFreqsMales;
     dataMat.zygoteFreqsFemales = zygoteFreqsFemales;
     
